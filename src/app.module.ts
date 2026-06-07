@@ -5,6 +5,9 @@ import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './users/user.module';
+import { AttemptsModule } from './attempts/attempts.module';
+import { SocialModule } from './social/social.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { QuizModule } from './quizzes/quiz.module';
 @Module({
   imports: [
@@ -12,6 +15,9 @@ import { QuizModule } from './quizzes/quiz.module';
     DatabaseModule,
     AuthModule,
     UserModule,
+    AttemptsModule,
+    SocialModule,
+    DashboardModule
     QuizModule,
   ],
   controllers: [AppController],
