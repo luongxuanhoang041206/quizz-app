@@ -6,13 +6,17 @@ import { DatabaseModule } from './database/database.module'
 import { AuthModule } from './auth/auth.module'
 import { UserModule } from './users/user.module';
 import { AttemptsModule } from './attempts/attempts.module';
+import { SocialModule } from './social/social.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule,
     AuthModule,
     UserModule,
-    AttemptsModule
+    AttemptsModule,
+    SocialModule,
+    DashboardModule
   ],
   controllers: [AppController],
   providers: [AppService],

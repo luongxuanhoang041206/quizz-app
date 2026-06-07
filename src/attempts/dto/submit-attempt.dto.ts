@@ -1,11 +1,17 @@
+import { IsArray, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, ValidateNested } from 'class-validator';
-import { AnswerItemDto } from './answer-item.dto';
+
+class AnswerDto {
+  @IsString()
+  question_id!: string;
+
+  @IsString()
+  selected_option!: string;
+}
 
 export class SubmitAttemptDto {
   @IsArray()
-  @ArrayMinSize(1)
   @ValidateNested({ each: true })
-  @Type(() => AnswerItemDto)
-  answers: AnswerItemDto[];
+  @Type(() => AnswerDto)
+  answers!: AnswerDto[];
 }
