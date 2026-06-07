@@ -1,9 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 // src/database/database.module.ts
-import { Global, Module } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { Global, Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-export const SUPABASE_CLIENT = 'SUPABASE_CLIENT'
+export const SUPABASE_CLIENT = 'SUPABASE_CLIENT';
 
 @Global()
 @Module({
