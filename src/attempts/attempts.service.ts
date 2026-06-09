@@ -26,7 +26,7 @@ interface UserAnswer {
 export class AttemptsService {
   constructor(
     @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
-  ) {}
+  ) { }
 
   /**
    * Tạo một attempt mới (bắt đầu làm quiz)

@@ -17,7 +17,7 @@ import { QuizModule } from './quizzes/quiz.module';
     UserModule,
     AttemptsModule,
     SocialModule,
-    DashboardModule
+    DashboardModule,
     QuizModule,
   ],
   controllers: [AppController],

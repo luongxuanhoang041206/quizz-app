@@ -7,7 +7,7 @@ import { CreateCommentDto } from './dto/create-comment.dto';
 export class SocialService {
   constructor(
     @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
-  ) {}
+  ) { }
 
   /**
    * Toggle Like - Thêm hoặc xóa like

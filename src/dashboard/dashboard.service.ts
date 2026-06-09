@@ -17,7 +17,7 @@ interface DashboardStats {
 export class DashboardService {
   constructor(
     @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
-  ) {}
+  ) { }
 
   /**
    * GET /api/dashboard
