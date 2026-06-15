@@ -10,5 +10,5 @@ export class CreateCommentDto {
   @IsString()
   @IsNotEmpty()
   @MinLength(1)
-  content: string;
+  content!: string;
 }

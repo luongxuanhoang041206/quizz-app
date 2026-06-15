@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsString, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsArray, IsString, IsNumber, ValidateNested } from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 
 export class AnswerDto {
   @ApiProperty({
@@ -11,11 +11,12 @@ export class AnswerDto {
   question_id!: string;
 
   @ApiProperty({
-    description: 'Selected answer option.',
-    example: 'Paris',
+    description: 'Index (0-based) of the selected option.',
+    example: 2,
   })
-  @IsString()
-  selected_option!: string;
+  @Transform(({ value }) => Number(value))
+  @IsNumber()
+  selected_answer_id!: number;
 }
 
 export class SubmitAttemptDto {
@@ -25,7 +26,7 @@ export class SubmitAttemptDto {
     example: [
       {
         question_id: '8bb536a6-d719-4e9f-a773-95d30f30d09b',
-        selected_option: 'Paris',
+        selected_answer_id: 2,
       },
     ],
   })

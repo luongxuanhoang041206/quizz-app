@@ -1,32 +1,51 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
+// dto/create-quiz.dto.ts
+import { IsString, IsOptional, IsEnum, IsArray, IsNumber, IsBoolean, ValidateNested } from 'class-validator';
+import { CreateQuestionDto } from './create-question.dto';
+import { Type } from 'class-transformer';
 
 export class CreateQuizDto {
-  @ApiProperty({
-    description: 'Quiz title.',
-    example: 'World Capitals Challenge',
-    maxLength: 150,
-  })
   @IsString()
-  @MaxLength(150)
   title!: string;
 
-  @ApiPropertyOptional({
-    description: 'Quiz description shown to players.',
-    example: 'Test your knowledge of capital cities around the world.',
-    maxLength: 1000,
-  })
   @IsOptional()
   @IsString()
-  @MaxLength(1000)
   description?: string;
 
-  @ApiPropertyOptional({
-    description: 'Whether the quiz can be viewed publicly.',
-    example: true,
-    default: false,
-  })
+  @IsOptional()
+  @IsEnum(['private', 'public', 'unlisted'])
+  visibility?: 'private' | 'public' | 'unlisted';
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateQuestionDto)
+  questions?: CreateQuestionDto[]
+
   @IsOptional()
   @IsBoolean()
-  is_public?: boolean;
+  published?: boolean;
+
+  @IsOptional()
+  @IsString()
+  difficulty?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsArray()
+  tags?: string[];
+
+  @IsOptional()
+  @IsNumber()
+  category_id?: number | string;
+
+  @IsOptional()
+  @IsNumber()
+  total_time?: number; // total time in minutes
+
+  @IsOptional()
+  @IsNumber()
+  time_per_question?: number; // in seconds or minutes depending on your schema
 }

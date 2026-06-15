@@ -17,7 +17,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { AuthUser } from '../common/decorators/current-user.decorator';
+import {CurrentUser } from '../common/decorators/current-user.decorator'
 import { AttemptsService } from './attempts.service';
 import { CreateAttemptDto } from './dto/create-attempt.dto';
 import { SubmitAttemptDto } from './dto/submit-attempt.dto';
@@ -41,9 +42,31 @@ export class AttemptsController {
         id: '4e283391-a313-43dc-a13c-76bbd42b3f32',
         user_id: '7b40b82e-0d39-4b3f-b4ec-744d2d8d49a6',
         quiz_id: '2f7df55f-5ea1-45a4-a6e8-929b518ad7e9',
-        status: 'started',
+        status: 'in_progress',
         started_at: '2026-06-08T04:10:00.000Z',
         answers: {},
+        quiz: {
+          id: '2f7df55f-5ea1-45a4-a6e8-929b518ad7e9',
+          title: 'General Knowledge Quiz',
+          description: 'Test your general knowledge',
+          time_limit: 600,
+          category_id: 'cat-uuid',
+          total_questions: 2,
+        },
+        questions: [
+          {
+            id: '8bb536a6-d719-4e9f-a773-95d30f30d09b',
+            content: 'What is the capital of France?',
+            points: 10,
+            order_index: 1,
+            options: [
+              { id: 'a1', text: 'Paris' },
+              { id: 'a2', text: 'Rome' },
+              { id: 'a3', text: 'Berlin' },
+              { id: 'a4', text: 'Madrid' },
+            ],
+          },
+        ],
       },
     },
   })
@@ -52,7 +75,7 @@ export class AttemptsController {
   @ApiResponse({ status: 404, description: 'Quiz not found or not public.' })
   create(
     @Body() createAttemptDto: CreateAttemptDto,
-    @CurrentUser() user: { id: string; email: string },
+    @CurrentUser() user: AuthUser,
   ) {
     return this.attemptsService.create(user.id, createAttemptDto);
   }
@@ -82,7 +105,7 @@ export class AttemptsController {
         answers: {
           '8bb536a6-d719-4e9f-a773-95d30f30d09b': {
             question_id: '8bb536a6-d719-4e9f-a773-95d30f30d09b',
-            selected_option: 'Paris',
+            selected_answer_id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
             is_correct: true,
           },
         },
@@ -132,9 +155,14 @@ export class AttemptsController {
           {
             question_id: '8bb536a6-d719-4e9f-a773-95d30f30d09b',
             content: 'What is the capital of France?',
-            options: ['Paris', 'Rome', 'Berlin', 'Madrid'],
-            correct_answer: 'Paris',
-            selected_option: 'Paris',
+            options: [
+              { id: 'a1', text: 'Paris' },
+              { id: 'a2', text: 'Rome' },
+              { id: 'a3', text: 'Berlin' },
+              { id: 'a4', text: 'Madrid' },
+            ],
+            correct_answer: { id: 'a1', text: 'Paris' },
+            selected_answer: { id: 'a1', text: 'Paris' },
             is_correct: true,
             points: 10,
             explanation: 'Paris is the capital of France.',

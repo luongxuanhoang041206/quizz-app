@@ -47,7 +47,7 @@ export class DashboardService {
         this.supabase
           .from('attempts')
           .select('id', { count: 'exact', head: true })
-          .eq('status', 'completed'),
+          .eq('status', 'submitted'),
         // Query 4: Top 10 quiz hot nhất (theo play_count)
         this.supabase
           .from('quizzes')
@@ -64,7 +64,7 @@ export class DashboardService {
         this.supabase
           .from('attempts')
           .select('id, score, total_points, status, users(username)')
-          .eq('status', 'completed')
+          .eq('status', 'submitted')
           .order('score', { ascending: false })
           .limit(10),
       ]);
@@ -115,7 +115,7 @@ export class DashboardService {
         topLikedQuizzes: topLikedQuizzesResult.data || [],
         topAttempts: topAttemptsFormatted,
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException(
         error.message || 'Lỗi khi lấy dữ liệu dashboard',
       );

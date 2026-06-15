@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -10,13 +10,14 @@ import {
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { UpdateUserDto } from './dto/UpdateUserDto';
 import { UserService } from './user.service';
+import { XpHistoryQueryDto, CursorPaginationDto } from './dto/query.dto';
 
 @ApiTags('Users')
 @Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @Get(':id')
+  @Get(':id/profile')
   @ApiOperation({ summary: 'Get a public user profile by id' })
   @ApiParam({
     name: 'id',
@@ -42,7 +43,7 @@ export class UserController {
     return this.userService.getUser(userId);
   }
 
-  @Patch(':id')
+  @Patch(':id/update')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Update a user profile' })
@@ -89,7 +90,7 @@ export class UserController {
           title: 'World Capitals Challenge',
           description: 'Test your knowledge of capital cities.',
           creator_id: '7b40b82e-0d39-4b3f-b4ec-744d2d8d49a6',
-          is_public: true,
+          visibility: 'public',
           created_at: '2026-06-08T04:00:00.000Z',
         },
       ],
@@ -128,5 +129,56 @@ export class UserController {
   @ApiResponse({ status: 400, description: 'Database error.' })
   userQuizzAttemps(@Param('id') userId: string) {
     return this.userService.userQuizzAttemps(userId);
+  }
+
+  @Get(':id/category-stats')
+  getCategoryStats(@Param('id') userId: string) {
+    return this.userService.getCategoryStats(userId);
+  }
+
+  @Get(':id/xp-history') // Lay data ve XP chart theo time
+  getXpChart(@Param('id') userId: string, @Query() query: XpHistoryQueryDto) {
+    const period = query?.period || 'week';
+    return this.userService.getXpHistory(userId, period as any);
+  }
+
+  @Get(':id/recent-attempts') // Ds quizz gan day voi score va XP earned
+  getRecentAttempt(
+    @Param('id') userId: string,
+    @Query() pager: CursorPaginationDto
+  ) {
+    const limit = pager?.limit || 10;
+    const cursor = pager?.cursor;
+    return this.userService.getRecentAttempts(userId, limit, cursor);
+  }
+
+  @Get(':id/badges')
+  getUserBadges(@Param('id') userId: string) {
+    return this.userService.getUserBadges(userId);
+  }
+
+  @Get(':id/activity') // timeline hoat dong gan day
+  getActivityFeed(
+    @Param('id') userId: string,
+    @Query() pager: CursorPaginationDto
+  ) {
+    const limit = pager?.limit || 20;
+    const cursor = pager?.cursor;
+    return this.userService.getActivityFeed(userId, limit, cursor);
+  }
+
+  @Get(':id/milestones')
+  getMilestones(
+    @Param('id') userId: string,
+  ) {
+    return this.userService.getMilestones(userId);
+  }
+
+  // Gop: profile + category-stats + badges (summany) + recent-attemps + activity
+  @Get(':id/profile/full') // single request cho lan dau tai profile page (bff pattern)
+  getFullProfile(
+    @Param('id') userId: string
+  ) {
+    return this.userService.getFullProfile(userId);
   }
 }

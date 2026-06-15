@@ -84,7 +84,7 @@ export class AuthService {
       .eq('id', userId)
       .single();
 
-    if (error) throw new UnauthorizedException(error.message);
+    if (error || !user) throw new UnauthorizedException('User not found');
 
     return user;
   }

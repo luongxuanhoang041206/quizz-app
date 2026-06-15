@@ -17,6 +17,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { AuthUser } from '../common/decorators/current-user.decorator';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreateSocialDto } from './dto/create-social.dto';
 import { SocialService } from './social.service';
@@ -45,7 +46,7 @@ export class SocialController {
   @ApiResponse({ status: 404, description: 'Quiz not found.' })
   toggleLike(
     @Param('id') quizId: string,
-    @CurrentUser() user: { id: string; email: string },
+    @CurrentUser() user: AuthUser,
   ) {
     return this.socialService.toggleLike(quizId, user.id);
   }
@@ -72,7 +73,7 @@ export class SocialController {
   @ApiResponse({ status: 404, description: 'Quiz not found.' })
   toggleBookmark(
     @Param('id') quizId: string,
-    @CurrentUser() user: { id: string; email: string },
+    @CurrentUser() user: AuthUser,
   ) {
     return this.socialService.toggleBookmark(quizId, user.id);
   }
@@ -136,9 +137,19 @@ export class SocialController {
   addComment(
     @Param('id') quizId: string,
     @Body() createCommentDto: CreateCommentDto,
-    @CurrentUser() user: { id: string; email: string },
+    @CurrentUser() user: AuthUser,
   ) {
     return this.socialService.addComment(quizId, user.id, createCommentDto);
+  }
+
+  @Post('comments/:id/replies')
+  @UseGuards(JwtAuthGuard)
+  reply(
+    @Param('id') commentId: string,
+    @CurrentUser() user: AuthUser,
+    @Body() createCommentDto: CreateCommentDto,
+  ) {
+    return this.socialService.reply(commentId, user.id, createCommentDto);
   }
 
   @Delete('comments/:id')
@@ -164,7 +175,7 @@ export class SocialController {
   @ApiResponse({ status: 404, description: 'Comment not found.' })
   deleteComment(
     @Param('id') commentId: string,
-    @CurrentUser() user: { id: string; email: string },
+    @CurrentUser() user: AuthUser,
   ) {
     return this.socialService.deleteComment(commentId, user.id);
   }
@@ -192,7 +203,7 @@ export class SocialController {
     return this.socialService.findAll();
   }
 
-  @Get(':id')
+  @Get()
   @ApiOperation({ summary: 'Legacy get social endpoint' })
   @ApiParam({ name: 'id', description: 'Numeric social id.', example: '1' })
   @ApiResponse({

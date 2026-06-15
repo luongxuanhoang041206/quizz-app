@@ -151,7 +151,8 @@ export class SocialService {
         content,
         created_at,
         updated_at,
-        users(username, avatar_url)
+        users(username, avatar_url),
+        is_deleted
         `,
       )
       .eq('quiz_id', quizId)
@@ -170,6 +171,7 @@ export class SocialService {
         username: comment.users?.username,
         avatar_url: comment.users?.avatar_url,
       },
+      is_deleted: comment.is_deleted,
     }));
   }
 
@@ -211,6 +213,36 @@ export class SocialService {
     return comment;
   }
 
+  async reply(commentId: string, userId: string, createCommentDto: CreateCommentDto) {
+    // Check comment co ton tai ko 
+    const { data: comment, error: commentError} = await this.supabase
+      .from('comments')
+      .select('id, user_id, quiz_id')
+      .eq('id', commentId)
+      .single()
+
+    if(commentError || !comment) throw new NotFoundException('Bình luận không tồn tại');
+
+    //Kiểm tra nội dung không rỗng
+    if (!createCommentDto.content || createCommentDto.content.trim().length === 0) {
+      throw new BadRequestException('Nội dung bình luận không được để trống');
+    }
+
+    const { data: reply, error: insertError} = await this.supabase
+      .from('comments')
+      .insert({
+        user_id: userId,
+        parent_id: commentId,
+        quiz_id: comment.quiz_id,
+        content: createCommentDto.content.trim(),
+      })
+      .select('id, content, created_at, updated_at')
+      .single()
+
+      if(insertError || !reply) throw new BadRequestException(insertError?.message || 'Khong the rep');
+
+      return reply;
+  }
   /**
    * Delete Comment - Xóa bình luận
    */

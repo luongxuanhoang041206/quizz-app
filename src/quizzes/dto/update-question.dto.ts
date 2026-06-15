@@ -2,6 +2,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
   IsInt,
+  IsNumber,
   IsObject,
   IsOptional,
   IsString,
@@ -67,4 +68,14 @@ export class UpdateQuestionDto {
   @IsInt()
   @Min(0)
   order_index?: number;
+
+  @ApiPropertyOptional({
+    description: 'Points awarded for a correct answer.',
+    example: 10,
+    minimum: 0,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  points?: number;
 }

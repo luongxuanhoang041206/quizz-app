@@ -24,36 +24,42 @@ import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import type { AuthUser } from 'src/common/decorators/current-user.decorator';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { CreateQuizDto } from './dto/create-quiz.dto';
+import { QueryQuizDto } from './dto/query-quiz.dto';
 import { ReorderQuestionsDto } from './dto/reorder-questions.dto';
+import { UpdateAnswerDto } from './dto/update-answer.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
 import { UpdateQuizDto } from './dto/update-quiz.dto';
 import { QuizService } from './quiz.service';
+import { toggleQuestionDto } from './dto/toggleQuestion.dto';
 
 @ApiTags('Quizzes')
 @Controller()
 export class QuizController {
   constructor(private readonly quizService: QuizService) { }
 
-  @Get('quizzes/search')
-  @ApiOperation({ summary: 'Search public quizzes' })
-  @ApiQuery({
-    name: 'q',
-    required: false,
-    description: 'Search keyword matched against title and description.',
-    example: 'capital',
-  })
+  @Get('quizzes')
+  @ApiOperation({ summary: 'List & search public quizzes' })
+  @ApiQuery({ name: 'search',     required: false, example: 'capital',   description: 'Keyword matched against title and description.' })
+  @ApiQuery({ name: 'category',   required: false, example: 'Geography', description: 'Filter by category name (case-insensitive partial match).' })
+  @ApiQuery({ name: 'difficulty', required: false, enum: ['easy', 'medium', 'hard'], description: 'Filter by difficulty.' })
+  @ApiQuery({ name: 'sort',       required: false, enum: ['newest', 'oldest', 'title'], example: 'newest' })
+  @ApiQuery({ name: 'page',       required: false, example: 1  })
+  @ApiQuery({ name: 'limit',      required: false, example: 10 })
   @ApiResponse({
     status: 200,
-    description: 'Paginated public quiz search results.',
+    description: 'Paginated public quizzes.',
     schema: {
       example: {
-        data: [
+        items: [
           {
             id: '2f7df55f-5ea1-45a4-a6e8-929b518ad7e9',
             title: 'World Capitals Challenge',
             description: 'Test your knowledge of capital cities.',
+            category: 'Geography',
+            difficulty: 'easy',
+            tags: ['world', 'capitals'],
             creator_id: '7b40b82e-0d39-4b3f-b4ec-744d2d8d49a6',
-            is_public: true,
+            visibility: 'public',
             created_at: '2026-06-08T04:00:00.000Z',
             users: {
               id: '7b40b82e-0d39-4b3f-b4ec-744d2d8d49a6',
@@ -62,53 +68,16 @@ export class QuizController {
             },
           },
         ],
-        meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
+        total: 1,
+        page: 1,
+        limit: 10,
+        totalPages: 1,
       },
     },
   })
-  @ApiResponse({ status: 400, description: 'Invalid query or database error.' })
-  searchQuizzes(@Query('q') keyword?: string) {
-    return this.quizService.searchQuizzes(keyword);
-  }
-
-  @Get('quizzes')
-  @ApiOperation({ summary: 'List public quizzes' })
-  @ApiQuery({ name: 'page', required: false, example: '1' })
-  @ApiQuery({ name: 'limit', required: false, example: '10' })
-  @ApiQuery({
-    name: 'sort',
-    required: false,
-    enum: ['newest', 'oldest', 'title'],
-    example: 'newest',
-  })
-  @ApiQuery({ name: 'q', required: false, example: 'capital' })
-  @ApiResponse({
-    status: 200,
-    description: 'Paginated public quizzes.',
-    schema: {
-      example: {
-        data: [
-          {
-            id: '2f7df55f-5ea1-45a4-a6e8-929b518ad7e9',
-            title: 'World Capitals Challenge',
-            description: 'Test your knowledge of capital cities.',
-            creator_id: '7b40b82e-0d39-4b3f-b4ec-744d2d8d49a6',
-            is_public: true,
-            created_at: '2026-06-08T04:00:00.000Z',
-          },
-        ],
-        meta: { page: 1, limit: 10, total: 1, totalPages: 1 },
-      },
-    },
-  })
-  @ApiResponse({ status: 400, description: 'Invalid query or database error.' })
-  getPublicQuizzes(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('sort') sort?: string,
-    @Query('q') keyword?: string,
-  ) {
-    return this.quizService.getPublicQuizzes({ page, limit, sort, keyword });
+  @ApiResponse({ status: 400, description: 'Validation or database error.' })
+  getPublicQuizzes(@Query() query: QueryQuizDto) {
+    return this.quizService.getPublicQuizzes(query);
   }
 
   @Post('quizzes')
@@ -124,7 +93,7 @@ export class QuizController {
         id: '2f7df55f-5ea1-45a4-a6e8-929b518ad7e9',
         title: 'World Capitals Challenge',
         description: 'Test your knowledge of capital cities.',
-        is_public: true,
+            visibility: 'public',
         creator_id: '7b40b82e-0d39-4b3f-b4ec-744d2d8d49a6',
         created_at: '2026-06-08T04:00:00.000Z',
       },
@@ -151,7 +120,7 @@ export class QuizController {
         id: '2f7df55f-5ea1-45a4-a6e8-929b518ad7e9',
         title: 'World Capitals Challenge',
         description: 'Test your knowledge of capital cities.',
-        is_public: true,
+        visibility: 'public',
         users: {
           id: '7b40b82e-0d39-4b3f-b4ec-744d2d8d49a6',
           username: 'alice_quiz',
@@ -194,7 +163,7 @@ export class QuizController {
         id: '2f7df55f-5ea1-45a4-a6e8-929b518ad7e9',
         title: 'World Capitals Challenge - Updated',
         description: 'A refreshed set of world capital questions.',
-        is_public: false,
+                visibility: 'public',
         updated_at: '2026-06-08T04:30:00.000Z',
       },
     },
@@ -226,7 +195,6 @@ export class QuizController {
   @ApiResponse({
     status: 200,
     description: 'Quiz deleted.',
-    schema: { example: { message: 'Quiz deleted successfully' } },
   })
   @ApiResponse({ status: 400, description: 'Database error.' })
   @ApiResponse({ status: 401, description: 'Missing or invalid bearer token.' })
@@ -376,5 +344,87 @@ export class QuizController {
     @Body() dto: ReorderQuestionsDto,
   ) {
     return this.quizService.reorderQuestions(quizId, user.id, dto);
+  }
+
+  @Patch('answers/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Update an answer in a question' })
+  @ApiParam({
+    name: 'id',
+    description: 'Answer id.',
+    example: 'c1d2e3f4-0000-0000-0000-000000000001',
+  })
+  @ApiBody({ type: UpdateAnswerDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Updated answer.',
+    schema: {
+      example: {
+        id: 'c1d2e3f4-0000-0000-0000-000000000001',
+        question_id: '8bb536a6-d719-4e9f-a773-95d30f30d09b',
+        text: 'Paris',
+        is_correct: true,
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Validation or database error.' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid bearer token.' })
+  @ApiResponse({ status: 403, description: 'Only the quiz owner may update answers.' })
+  @ApiResponse({ status: 404, description: 'Answer or question not found.' })
+  updateAnswer(
+    @Param('id') answerId: string,
+    @CurrentUser() user: AuthUser,
+    @Body() dto: UpdateAnswerDto,
+  ) {
+    return this.quizService.updateAnswer(answerId, user.id, dto);
+  }
+
+  @Delete('answers/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Delete an answer from a question' })
+  @ApiParam({
+    name: 'id',
+    description: 'Answer id.',
+    example: 'c1d2e3f4-0000-0000-0000-000000000001',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Answer deleted.',
+    schema: { example: { message: 'Answer deleted successfully' } },
+  })
+  @ApiResponse({ status: 400, description: 'Database error.' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid bearer token.' })
+  @ApiResponse({ status: 403, description: 'Only the quiz owner may delete answers.' })
+  @ApiResponse({ status: 404, description: 'Answer or question not found.' })
+  deleteAnswer(
+    @Param('id') answerId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.quizService.deleteAnswer(answerId, user.id);
+  }
+
+  @Patch('quizzes/:id/visibility')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: "Toggle a quiz's visibility (public <-> private)" })
+  @ApiParam({
+    name: 'id',
+    description: 'Quiz id.',
+    example: '2f7df55f-5ea1-45a4-a6e8-929b518ad7e9',
+  })
+  @ApiBody({ type: toggleQuestionDto })
+  @ApiResponse({ status: 200, description: 'Updated quiz.' })
+  @ApiResponse({ status: 400, description: 'Validation or database error.' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid bearer token.' })
+  @ApiResponse({ status: 403, description: 'Only the quiz owner may change visibility.' })
+  @ApiResponse({ status: 404, description: 'Quiz not found.' })
+  toggleVisibility(
+    @Param('id') quizId: string,
+    @CurrentUser() user: AuthUser,
+    @Body() dto: toggleQuestionDto,
+  ) {
+    return this.quizService.toggle(quizId, user.id, dto);
   }
 }
