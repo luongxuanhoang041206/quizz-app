@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, Session } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
@@ -9,6 +9,8 @@ import { AttemptsModule } from './attempts/attempts.module';
 import { SocialModule } from './social/social.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { QuizModule } from './quizzes/quiz.module';
+import { SessionsModule } from './sessions/sessions.module';
+import { LeaderboardModule } from './leaderboard/leaderboard.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -19,6 +21,8 @@ import { QuizModule } from './quizzes/quiz.module';
     SocialModule,
     DashboardModule,
     QuizModule,
+    SessionsModule,
+    LeaderboardModule
   ],
   controllers: [AppController],
   providers: [AppService],
