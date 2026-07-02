@@ -1,7 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 import {
   BadRequestException,
   ForbiddenException,
@@ -25,17 +21,17 @@ import { toggleQuestionDto } from './dto/toggleQuestion.dto';
 export class QuizService {
   constructor(
     @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
-  ) {}
+  ) { }
 
   async getPublicQuizzes(query: QueryQuizDto) {
-    const page  = query.page  ?? 1;
+    const page = query.page ?? 1;
     const limit = query.limit ?? 10;
-    const from  = (page - 1) * limit;
-    const to    = from + limit - 1;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
 
     const sortMap: Record<string, { column: string; ascending: boolean }> = {
-      oldest: { column: 'created_at', ascending: true  },
-      title:  { column: 'title',      ascending: true  },
+      oldest: { column: 'created_at', ascending: true },
+      title: { column: 'title', ascending: true },
       newest: { column: 'created_at', ascending: false },
     };
     const sort = sortMap[query.sort ?? 'newest'] ?? sortMap.newest;
@@ -68,7 +64,7 @@ export class QuizService {
 
     if (error) throw new BadRequestException(error.message);
 
-    const total      = count ?? 0;
+    const total = count ?? 0;
     const totalPages = Math.ceil(total / limit);
     return {
       items: data,
@@ -95,7 +91,7 @@ export class QuizService {
         difficulty: dto.difficulty,
         tags: dto.tags ?? [],
         total_time: dto.total_time ?? dto.total_time,
-        time_per_question: dto.time_per_question,
+      //  time_per_question: dto.time_per_question,
       })
       .select()
       .single();
@@ -103,16 +99,20 @@ export class QuizService {
     if (error) throw new BadRequestException(error.message);
 
     if (dto.questions && Array.isArray(dto.questions) && dto.questions.length > 0) {
-      const questionsPayload = dto.questions.map((q, idx) => ({
-        question_text: q.question_text,
-        type: q.type,
-        points: q.points,
-        explanation: q.explanation,
-        options: Array.isArray(q.options) ? q.options : [],
-        correct_answer: q.correct_answer ?? null,
-        order_index: typeof q.order_index === 'number' ? q.order_index : idx,
-        quiz_id: data.id,
-      }));
+      const questionsPayload = dto.questions.map((q, idx) => {
+        const options = Array.isArray(q.options) ? q.options : [];
+        const normalizedCorrectAnswer = this.normalizeCorrectAnswer(q.type ?? 'SINGLE_CHOICE', options, q.correct_answer);
+        return {
+          question_text: q.question_text,
+          type: q.type,
+          points: q.points,
+          explanation: q.explanation,
+          options,
+          correct_answer: normalizedCorrectAnswer ?? null,
+          order_index: typeof q.order_index === 'number' ? q.order_index : idx,
+          quiz_id: data.id,
+        };
+      });
 
       const { data: createdQuestions, error: qError } = await this.supabase
         .from('questions')
@@ -132,29 +132,8 @@ export class QuizService {
         const created = createdQuestions[i];
         const src = dto.questions[i];
         const options = Array.isArray(src.options) ? src.options : [];
-
-        // Determine correct indices/values from src.correct_answer
-        const correct = src.correct_answer;
-
-        const correctIndices: number[] = [];
-        if (correct) {
-          if (Array.isArray((correct as any).indices)) {
-            (correct as any).indices.forEach((n: number) => correctIndices.push(n));
-          } else if (typeof (correct as any).index === 'number') {
-            correctIndices.push((correct as any).index);
-          } else if (Array.isArray((correct as any).values)) {
-            (correct as any).values.forEach((val: any) => {
-              const idx = options.indexOf(val);
-              if (idx >= 0) correctIndices.push(idx);
-            });
-          } else if (typeof (correct as any).value === 'string') {
-            const idx = options.indexOf((correct as any).value);
-            if (idx >= 0) correctIndices.push(idx);
-          } else if (typeof correct === 'string') {
-            const idx = options.indexOf(correct as any);
-            if (idx >= 0) correctIndices.push(idx);
-          }
-        }
+        const normalized = this.normalizeCorrectAnswer(src.type ?? 'SINGLE_CHOICE', options, src.correct_answer);
+        const correctIndices = this.resolveCorrectIndices(options, normalized);
 
         for (let j = 0; j < options.length; j++) {
           answersPayload.push({
@@ -224,6 +203,60 @@ export class QuizService {
   async deleteQuiz(quizId: string, userId: string) {
     await this.ensureQuizOwner(quizId, userId);
 
+    const { data: sessions, error: sessionsError } = await this.supabase
+      .from('quiz_sessions')
+      .select('id')
+      .eq('quiz_id', quizId);
+
+    if (sessionsError) throw new BadRequestException(sessionsError.message);
+
+    if (Array.isArray(sessions) && sessions.length > 0) {
+      const sessionIds = sessions.map((session) => session.id).filter(Boolean);
+
+      if (sessionIds.length > 0) {
+        const { error: leaderboardError } = await this.supabase
+          .from('leaderboard')
+          .delete()
+          .in('session_id', sessionIds);
+
+        if (leaderboardError) throw new BadRequestException(leaderboardError.message);
+
+        const { error: sessionDeleteError } = await this.supabase
+          .from('quiz_sessions')
+          .delete()
+          .in('id', sessionIds);
+
+        if (sessionDeleteError) throw new BadRequestException(sessionDeleteError.message);
+      }
+    }
+
+    const { data: questions, error: questionsError } = await this.supabase
+      .from('questions')
+      .select('id')
+      .eq('quiz_id', quizId);
+
+    if (questionsError) throw new BadRequestException(questionsError.message);
+
+    if (Array.isArray(questions) && questions.length > 0) {
+      const questionIds = questions.map((question) => question.id).filter(Boolean);
+
+      if (questionIds.length > 0) {
+        const { error: answersError } = await this.supabase
+          .from('answers')
+          .delete()
+          .in('question_id', questionIds);
+
+        if (answersError) throw new BadRequestException(answersError.message);
+
+        const { error: questionsDeleteError } = await this.supabase
+          .from('questions')
+          .delete()
+          .in('id', questionIds);
+
+        if (questionsDeleteError) throw new BadRequestException(questionsDeleteError.message);
+      }
+    }
+
     const { error } = await this.supabase
       .from('quizzes')
       .delete()
@@ -236,6 +269,10 @@ export class QuizService {
 
   async createQuestion(quizId: string, userId: string, dto: CreateQuestionDto) {
     await this.ensureQuizOwner(quizId, userId);
+    const options = Array.isArray(dto.options) ? dto.options : [];
+    const normalizedCorrectAnswer = this.normalizeCorrectAnswer(dto.type ?? 'SINGLE_CHOICE', options, dto.correct_answer);
+    const correctIndices = this.resolveCorrectIndices(options, normalizedCorrectAnswer);
+
     // insert question (without embedding options/correct_answer)
     const { data: createdQuestion, error: qError } = await this.supabase
       .from('questions')
@@ -244,8 +281,8 @@ export class QuizService {
         type: dto.type,
         points: dto.points,
         explanation: dto.explanation,
-        options: Array.isArray(dto.options) ? dto.options : [],
-        correct_answer: dto.correct_answer ?? null,
+        options,
+        correct_answer: normalizedCorrectAnswer ?? null,
         order_index: dto.order_index,
         quiz_id: quizId,
       })
@@ -255,30 +292,7 @@ export class QuizService {
     if (qError || !createdQuestion) throw new BadRequestException(qError?.message);
 
     // insert answers if provided
-    const options = Array.isArray(dto.options) ? dto.options : [];
     const answersPayload: any[] = [];
-
-    // determine correct indices/values
-    const correct = dto.correct_answer;
-    const correctIndices: number[] = [];
-    if (correct) {
-      if (Array.isArray((correct as any).indices)) {
-        (correct as any).indices.forEach((n: number) => correctIndices.push(n));
-      } else if (typeof (correct as any).index === 'number') {
-        correctIndices.push((correct as any).index);
-      } else if (Array.isArray((correct as any).values)) {
-        (correct as any).values.forEach((val: any) => {
-          const idx = options.indexOf(val);
-          if (idx >= 0) correctIndices.push(idx);
-        });
-      } else if (typeof (correct as any).value === 'string') {
-        const idx = options.indexOf((correct as any).value);
-        if (idx >= 0) correctIndices.push(idx);
-      } else if (typeof correct === 'string') {
-        const idx = options.indexOf(correct as any);
-        if (idx >= 0) correctIndices.push(idx);
-      }
-    }
 
     for (let j = 0; j < options.length; j++) {
       answersPayload.push({ question_id: createdQuestion.id, text: options[j], is_correct: correctIndices.includes(j) });
@@ -292,7 +306,6 @@ export class QuizService {
         throw new BadRequestException(aError.message);
       }
     }
-
     return createdQuestion;
   }
 
@@ -303,48 +316,49 @@ export class QuizService {
   ) {
     const question = await this.getQuestion(questionId);
     await this.ensureQuizOwner(question.quiz_id, userId);
+
+    const type = dto.type ?? question.type;
+    const options = Array.isArray((dto as any).options)
+      ? (dto as any).options
+      : (Array.isArray(question.options) ? question.options : []);
+
+    let normalizedCorrectAnswer = question.correct_answer;
+    if (dto.correct_answer !== undefined || Array.isArray((dto as any).options) || dto.type !== undefined) {
+      const correctSource = dto.correct_answer !== undefined ? dto.correct_answer : question.correct_answer;
+      normalizedCorrectAnswer = this.normalizeCorrectAnswer(type ?? 'SINGLE_CHOICE', options, correctSource);
+    }
+
+    const updateFields: any = {
+      question_text: dto.question_text,
+      type: dto.type,
+      points: dto.points,
+      explanation: dto.explanation,
+      order_index: dto.order_index,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (Array.isArray((dto as any).options)) {
+      updateFields.options = options;
+    }
+    if (dto.correct_answer !== undefined || Array.isArray((dto as any).options) || dto.type !== undefined) {
+      updateFields.correct_answer = normalizedCorrectAnswer ?? null;
+    }
+
     const { data, error } = await this.supabase
       .from('questions')
-      .update({
-        question_text: dto.question_text,
-        type: dto.type,
-        points: dto.points,
-        explanation: dto.explanation,
-        order_index: dto.order_index,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateFields)
       .eq('id', questionId)
       .select()
       .single();
 
     if (error || !data) throw new BadRequestException(error?.message);
 
-    // If options are provided, replace answers for this question
-    if (Array.isArray((dto as any).options)) {
+    // If options/correct_answer are provided (or type changed), replace answers for this question
+    if (Array.isArray((dto as any).options) || dto.correct_answer !== undefined || dto.type !== undefined) {
       // delete old answers
       await this.supabase.from('answers').delete().eq('question_id', questionId);
 
-      const options = (dto as any).options as any[];
-      const correct = (dto as any).correct_answer;
-      const correctIndices: number[] = [];
-      if (correct) {
-        if (Array.isArray((correct as any).indices)) {
-          (correct as any).indices.forEach((n: number) => correctIndices.push(n));
-        } else if (typeof (correct as any).index === 'number') {
-          correctIndices.push((correct as any).index);
-        } else if (Array.isArray((correct as any).values)) {
-          (correct as any).values.forEach((val: any) => {
-            const idx = options.indexOf(val);
-            if (idx >= 0) correctIndices.push(idx);
-          });
-        } else if (typeof (correct as any).value === 'string') {
-          const idx = options.indexOf((correct as any).value);
-          if (idx >= 0) correctIndices.push(idx);
-        } else if (typeof correct === 'string') {
-          const idx = options.indexOf(correct as any);
-          if (idx >= 0) correctIndices.push(idx);
-        }
-      }
+      const correctIndices = this.resolveCorrectIndices(options, normalizedCorrectAnswer);
 
       const answersPayload: any[] = [];
       for (let j = 0; j < options.length; j++) {
@@ -416,7 +430,7 @@ export class QuizService {
   private async getQuestion(questionId: string) {
     const { data, error } = await this.supabase
       .from('questions')
-      .select('id, quiz_id')
+      .select('id, quiz_id, type, options, correct_answer')
       .eq('id', questionId)
       .single();
 
@@ -429,6 +443,127 @@ export class QuizService {
     if (creatorId !== userId) {
       throw new ForbiddenException('Only quiz creator can do this action');
     }
+  }
+
+  private resolveCorrectIndices(options: unknown[], correct: unknown): number[] {
+    if (!Array.isArray(options) || options.length === 0 || !correct) {
+      return [];
+    }
+
+    const indices = new Set<number>();
+    const pushIndex = (value: unknown) => {
+      if (
+        typeof value === 'number' &&
+        Number.isInteger(value) &&
+        value >= 0 &&
+        value < options.length
+      ) {
+        indices.add(value);
+      }
+    };
+    const findOptionIndex = (value: unknown) =>
+      options.findIndex((option) => String(option) === String(value));
+
+    const correctRecord =
+      correct !== null && typeof correct === 'object'
+        ? (correct as Record<string, unknown>)
+        : null;
+
+    if (correctRecord) {
+      if (Array.isArray(correctRecord.indices)) {
+        correctRecord.indices.forEach((value) => pushIndex(value));
+      }
+
+      if (typeof correctRecord.index === 'number') {
+        pushIndex(correctRecord.index);
+      }
+
+      if (Array.isArray(correctRecord.values)) {
+        correctRecord.values.forEach((value) => {
+          const index = findOptionIndex(value);
+          if (index >= 0) indices.add(index);
+        });
+      }
+
+      if (typeof correctRecord.value === 'string') {
+        const index = findOptionIndex(correctRecord.value);
+        if (index >= 0) indices.add(index);
+      }
+
+      if ('answer' in correctRecord) {
+        const answer = correctRecord.answer;
+
+        if (typeof answer === 'boolean') {
+          const trueIndex = options.findIndex((option) => String(option).toLowerCase() === 'true');
+          const falseIndex = options.findIndex((option) => String(option).toLowerCase() === 'false');
+          const fallbackIndex = answer ? 0 : Math.min(1, options.length - 1);
+          const selectedIndex = answer
+            ? (trueIndex >= 0 ? trueIndex : fallbackIndex)
+            : (falseIndex >= 0 ? falseIndex : fallbackIndex);
+          pushIndex(selectedIndex);
+        } else {
+          const index = findOptionIndex(answer);
+          if (index >= 0) indices.add(index);
+        }
+      }
+    }
+
+    if (typeof correct === 'string' || typeof correct === 'number') {
+      const index = typeof correct === 'number' ? correct : findOptionIndex(correct);
+      pushIndex(index);
+    }
+
+    return [...indices].sort((a, b) => a - b);
+  }
+
+  private normalizeCorrectAnswer(type: string, options: unknown[], correct: unknown): any {
+    if (!correct) return null;
+
+    const correctIndices = this.resolveCorrectIndices(options, correct);
+    if (correctIndices.length === 0) {
+      return correct;
+    }
+
+    const qType = String(type).toUpperCase();
+
+    if (qType === 'SINGLE_CHOICE') {
+      const index = correctIndices[0];
+      const value = String(options[index] ?? '');
+      return { index, value };
+    }
+
+    if (qType === 'MULTIPLE_CHOICE') {
+      const indices = correctIndices;
+      const values = indices.map((idx) => String(options[idx] ?? ''));
+      return { indices, values };
+    }
+
+    if (qType === 'TRUE_FALSE') {
+      let answer = false;
+      const index = correctIndices[0];
+      const optStr = String(options[index] ?? '').toLowerCase();
+      if (optStr === 'true') {
+        answer = true;
+      } else if (optStr === 'false') {
+        answer = false;
+      } else {
+        const correctRecord = typeof correct === 'object' && correct !== null ? (correct as any) : {};
+        if (typeof correctRecord.answer === 'boolean') {
+          answer = correctRecord.answer;
+        } else {
+          answer = index === 0;
+        }
+      }
+      return { answer };
+    }
+
+    if (qType === 'FILL_BLANK' || qType === 'SHORT_TEXT') {
+      const correctRecord = typeof correct === 'object' && correct !== null ? (correct as any) : {};
+      const answer = 'answer' in correctRecord ? String(correctRecord.answer) : String(correct);
+      return { answer };
+    }
+
+    return correct;
   }
 
   async updateAnswer(answerId: string, userId: string, dto: UpdateAnswerDto) {
@@ -501,8 +636,8 @@ export class QuizService {
     const newVisibility: 'private' | 'public' = dto.visibility
       ? dto.visibility
       : currentVisibility === 'public'
-      ? 'private'
-      : 'public';
+        ? 'private'
+        : 'public';
 
     const { data, error } = await this.supabase
       .from('quizzes')

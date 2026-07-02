@@ -45,7 +45,7 @@ export class CreateQuizDto {
   @IsNumber()
   total_time?: number; // total time in minutes
 
-  @IsOptional()
-  @IsNumber()
-  time_per_question?: number; // in seconds or minutes depending on your schema
+  // @IsOptional()
+  // @IsNumber()
+  // time_per_question?: number; // in seconds or minutes depending on your schema
 }

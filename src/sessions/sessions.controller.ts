@@ -3,7 +3,7 @@ import { SessionsService } from "./sessions.service";
 import { JwtAuthGuard } from "src/auth/jwt-auth.guard";
 import { CurrentUser } from "src/common/decorators/current-user.decorator";
 import type { AuthUser } from "src/common/decorators/current-user.decorator";
-import { CreateSessionDto } from "./dto/create-sessions.dto";
+
 import { UpdateSessionStatusDto } from "./dto/update-session.dto";
 @Controller()
 export class SessionsController {
@@ -14,10 +14,10 @@ export class SessionsController {
     @UseGuards(JwtAuthGuard)
     @Post('quizzes/:quizId/sessions')
     createSession(
-        @Body() dto: CreateSessionDto,
+        @Param('quizId') quizId: string,
         @CurrentUser() user: AuthUser
     ) {
-        return this.sessionsService.createSession(dto.quiz_id, user.id);
+        return this.sessionsService.createSession(quizId, user.id);
     }
 
     @UseGuards(JwtAuthGuard)
@@ -26,9 +26,21 @@ export class SessionsController {
         return this.sessionsService.joinByCode(code, user.id, user.username);
     }
 
-    @Get('sessions/:code/start')
-    start(@Param('code') code: string) {
-        return this.sessionsService.start(code);
+    // @Get('sessions/:code/start')
+    // start(@Param('code') code: string) {
+    //     return this.sessionsService.start(code);
+    // }
+
+    @Get('quizzes/:quizId/sessions')
+    getSessionByQuiz(@Param('quizId') quizId: string) {
+        return this.sessionsService.getSessionByQuiz(quizId);
+    }
+
+    @Get('sessions/:id/status')
+    getStatus(
+        @Param('id') sessionId: string,
+    ) {
+        return this.sessionsService.getStatus(sessionId);
     }
 
     @UseGuards(JwtAuthGuard)

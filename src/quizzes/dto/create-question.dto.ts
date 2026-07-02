@@ -22,7 +22,7 @@ export class CreateQuestionDto {
 
   @ApiPropertyOptional({
     description: 'Question type.',
-    example: 'multiple_choice',
+    example: 'MULTIPLE_CHOICE',
   })
   @IsOptional()
   @IsString()
@@ -39,7 +39,7 @@ export class CreateQuestionDto {
 
   @ApiPropertyOptional({
     description: 'Correct answer payload.',
-    example: { value: 'Paris' },
+    example: { values: ['Paris', 'Berlin'], indices: [0, 2] },
     type: 'object',
     additionalProperties: true,
   })
@@ -76,4 +76,5 @@ export class CreateQuestionDto {
   @IsNumber()
   @Min(0)
   points?: number;
+
 }

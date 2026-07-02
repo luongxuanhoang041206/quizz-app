@@ -22,4 +22,9 @@ export class LeaderboardController {
   getLeaderboard(@Param('id') sessionId: string) {
     return this.leaderboardService.getLeaderboard(sessionId);
   }
+
+  @Get('leaderboard/countPlayer')
+  countPlayer(@Param('id') sessionId: string) {
+    return this.leaderboardService.countPlayer(sessionId);
+  }
 }

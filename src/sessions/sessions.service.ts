@@ -46,12 +46,12 @@ export class SessionsService {
     async joinByCode(code: string, userId: string, username: string) {
         const { data: session, error } = await this.supabase
             .from('quiz_sessions')
-            .select('id, quiz_id, status, code, username')
+            .select('id, quiz_id, host_id, status, code')
             .eq('code', code.toUpperCase())
             .single();
 
         if(error || !session) throw new NotFoundException('Khong tim thay phong');
-        if(session.status === 'finnished') throw new BadRequestException('Phong da ket thuc');
+        if(session.status === 'finished') throw new BadRequestException('Phong da ket thuc');
 
         await this.supabase
             .from('leaderboard')
@@ -59,23 +59,63 @@ export class SessionsService {
                 session_id: session.id,
                 user_id: userId,
                 score: 0,
-                username: session.username
+                username: username,
             })
         return session;
     }
 
-    async start(code: string) {
-        const { data: session, error } = await this.supabase
-            .from('quiz- sessions')
-            .select('status, code')
-            .eq('code', code.toUpperCase())
-            .single()
+    // async start(code: string) {
+    //     const { data: session, error } = await this.supabase
+    //         .from('quiz-sessions')
+    //         .select('status, code')
+    //         .eq('code', code.toUpperCase())
+    //         .single()
 
         
-        if(error || !session) throw new NotFoundException('Khong tim thay phong');
-        if(session.status === 'waiting') throw new BadRequestException('Chua bat dau lam bai ');
+    //     if(error || !session) throw new NotFoundException('Khong tim thay phong');
+    //     return session;
+    // }
+
+
+    async getSessionByQuiz(quizId: string) {
+        const { data: session, error } = await this.supabase
+            .from('quiz_sessions')
+            .select('id, quiz_id, host_id, code, status, created_at')
+            .eq('quiz_id', quizId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (error) {
+            throw new BadRequestException(error.message);
+        }
+
+        if (!session) {
+            return [];
+        }
         return session;
     }
+
+    async getStatus(sessionId: string) {
+        const { data: session, error } = await this.supabase
+            .from('quiz_sessions')
+            .select('id, status')
+            .eq('id', sessionId)
+            .single();
+
+        if (error) {
+            throw new BadRequestException(error.message);
+        }
+
+        if (!session) {
+            throw new NotFoundException('Session not found');
+        }
+
+        return {
+            status: session.status
+        };
+    }
+
     // Patch
     async updateStatus(sessionId: string, hostId: string, status: string) {
         const { data: session, error: sessionError } = await this.supabase
@@ -83,7 +123,6 @@ export class SessionsService {
             .select('id, host_id, status')
             .eq('id', sessionId)
             .single();
-
         if(sessionError || !session) throw new NotFoundException('Session ko ton tai');
         if(session.host_id !== hostId) throw new ForbiddenException('M eo phai host');
 

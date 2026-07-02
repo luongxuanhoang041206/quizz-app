@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-
 import {
   ConflictException,
   Inject,
@@ -47,7 +45,7 @@ export class AuthService {
 
     if (error) throw new Error(error.message);
 
-    const token = this.signToken(user.id, user.email);
+    const token = this.signToken(user.id, user.email, user.username);
 
     return { access_token: token, user };
   }
@@ -64,7 +62,7 @@ export class AuthService {
     const isMatch = await bcrypt.compare(dto.password, user.password_hash);
     if (!isMatch) throw new UnauthorizedException('Email or password ko dung');
 
-    const token = this.signToken(user.id, user.email);
+    const token = this.signToken(user.id, user.email, user.username);
 
     const safeUser = {
       id: user.id,
@@ -89,7 +87,7 @@ export class AuthService {
     return user;
   }
 
-  private signToken(userId: string, email: string): string {
-    return this.jwtService.sign({ sub: userId, email });
+  private signToken(userId: string, email: string, username: string): string {
+    return this.jwtService.sign({ sub: userId, email, username });
   }
 }
