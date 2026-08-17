@@ -5,9 +5,12 @@ import { CreateAttemptDto } from './dto/create-attempt.dto';
 import { UpdateAttemptDto } from './dto/update-attempt.dto';
 import { SubmitAttemptDto } from './dto/submit-attempt.dto';
 import { XpService } from 'src/users/xp.service';
-import { BadgeService } from 'src/users/badge.service';
 import { ActivityService } from 'src/users/activity.service';
 import { XpCalcParams } from 'src/users/types';
+import { QuizGradingService } from 'src/quiz-grading/quiz-grading.service';
+
+// Minimum score percentage (0–100) required to earn an NFT achievement
+const NFT_SCORE_THRESHOLD = 80;
 
 enum AttemptStatus {
   In_progres = 'in_progress',
@@ -24,14 +27,15 @@ export class AttemptsService {
   constructor(
     @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
     private readonly xpService: XpService,
-    private readonly badgeService: BadgeService,
     private readonly activityService: ActivityService,
+    private readonly quizGradingService: QuizGradingService,
   ) {}
 
   async create(userId: string, createAttemptDto: CreateAttemptDto) {
+    console.log(createAttemptDto);
     const { data: quiz, error: quizError } = await this.supabase
       .from('quizzes')
-      .select('id, title, description, visibility, total_time, time_per_question')
+      .select('id, title, description, visibility, total_time, time_per_question, is_nft_quiz')
       .eq('id', createAttemptDto.quiz_id)
       .eq('visibility', 'public')
       .single();
@@ -51,7 +55,7 @@ export class AttemptsService {
       })
       .select('id, user_id, quiz_id, status, started_at, answers')
       .single();
-
+      console.log("Attemps: ", attempt)
     if (insertError || !attempt) {
       throw new BadRequestException(insertError?.message || 'Tạo attempt thất bại');
     }
@@ -85,12 +89,14 @@ export class AttemptsService {
         total_time: quiz.total_time,
         time_per_question: quiz.time_per_question,
         total_questions: questions.length,
+        is_nft_quiz: quiz.is_nft_quiz ?? false,
       },
       questions: questionsWithOptions,
     };
   }
 
   async submit(attemptId: string, submitAttemptDto: SubmitAttemptDto, userId: string) {
+    console.log("Start submit attemps");
     // Bước 1: Lấy thông tin attempt
     const { data: attempt, error: attemptError } = await this.supabase
       .from('attempts')
@@ -127,51 +133,20 @@ export class AttemptsService {
         points: number;
         explanation?: string;
         options: string[];
-        correctIndices: number[];
+        correct_answer: unknown;
       };
     } = {};
     let totalPoints = 0;
 
     questions.forEach((q) => {
       const options: string[] = Array.isArray(q.options) ? q.options : [];
-      const correct = q.correct_answer ?? {};
-      const correctIndices: number[] = [];
-
-      // Support tất cả các format correct_answer từ DB:
-      // { indices: [0, 1] }  — multi correct (seed data)
-      // { index: 0 }         — single correct (FE tạo quiz)
-      // { values: ['text'] } — text-based multi
-      // { value: 'text' }    — text-based single
-      // { answer: 'text' }   — free text (bỏ qua, không chấm được)
-      if (Array.isArray(correct.indices)) {
-        correct.indices.forEach((i: unknown) => {
-          const n = Number(i);
-          if (!isNaN(n)) correctIndices.push(n);
-        });
-      } else if (typeof correct.index === 'number') {
-        correctIndices.push(correct.index);
-      } else if (typeof correct.index === 'string') {
-        // Phòng trường hợp index lưu dạng string "0"
-        const n = Number(correct.index);
-        if (!isNaN(n)) correctIndices.push(n);
-      } else if (Array.isArray(correct.values)) {
-        correct.values.forEach((val: unknown) => {
-          const idx = options.indexOf(String(val));
-          if (idx >= 0) correctIndices.push(idx);
-        });
-      } else if (typeof correct.value === 'string') {
-        const idx = options.indexOf(correct.value);
-        if (idx >= 0) correctIndices.push(idx);
-      }
-
-      // Log để debug
-      console.log(`[submit] question ${q.id}:`, {
-        correct_answer_raw: JSON.stringify(correct),
-        correctIndices,
-        options_count: options.length,
-      });
-
-      questionMap[q.id] = { id: q.id, points: q.points, explanation: q.explanation, options, correctIndices };
+      questionMap[q.id] = {
+        id: q.id,
+        points: q.points,
+        explanation: q.explanation,
+        options,
+        correct_answer: q.correct_answer,
+      };
       totalPoints += q.points;
     });
 
@@ -194,14 +169,17 @@ export class AttemptsService {
         );
       }
 
-      const isCorrect = question.correctIndices.includes(selectedIndex);
-
-      // Log để debug
-      console.log(`[submit] answer for ${answer.question_id}:`, {
+      const gradingResult = this.quizGradingService.gradeQuestion(
+        {
+          ...question,
+          type: 'SINGLE_CHOICE',
+          options: question.options,
+          correct_answer: question.correct_answer,
+        },
         selectedIndex,
-        correctIndices: question.correctIndices,
-        isCorrect,
-      });
+      );
+
+      const isCorrect = gradingResult.isCorrect;
 
       if (isCorrect) score += question.points;
 
@@ -233,7 +211,7 @@ export class AttemptsService {
     // Tăng play_count
     const { data: quizData } = await this.supabase
       .from('quizzes')
-      .select('play_count')
+      .select('play_count, is_nft_quiz, reward_id')
       .eq('id', attempt.quiz_id)
       .single();
 
@@ -243,6 +221,11 @@ export class AttemptsService {
         .update({ play_count: (quizData.play_count || 0) + 1 })
         .eq('id', attempt.quiz_id);
     }
+
+    // NFT eligibility: quiz must be nft-enabled and score >= NFT_SCORE_THRESHOLD%
+    const scorePercentage = totalPoints > 0 ? (score / totalPoints) * 100 : 0;
+    const isNftEligible =
+      (quizData?.is_nft_quiz ?? false) && scorePercentage >= NFT_SCORE_THRESHOLD;
 
     // Progression
     const totalQuestions = questions.length;
@@ -263,6 +246,7 @@ export class AttemptsService {
           score,
           total_points: totalPoints,
           percentage: totalPoints > 0 ? ((score / totalPoints) * 100).toFixed(2) : '0.00',
+          nft_eligible: isNftEligible,
         },
       };
     }
@@ -323,7 +307,23 @@ export class AttemptsService {
       durationSeconds,
     });
 
-    await this.badgeService.checkAndAwardBadges(userId);
+    // Tạo achievement record (PENDING) chỉ khi quiz là NFT quiz và user đủ điểm
+    let achievementId: string | undefined;
+    if (isNftEligible && quizData?.reward_id) {
+      const { data: dataAchievement } = await this.supabase
+        .from('achievement')
+        .insert({
+          user_id: userId,
+          quiz_id: attempt.quiz_id,
+          reward_id: quizData.reward_id,
+          status: 'PENDING',
+          created_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+     // console.log(dataAchievement);
+      achievementId = dataAchievement?.id;
+    }
 
     return {
       ...updatedAttempt,
@@ -335,6 +335,8 @@ export class AttemptsService {
         is_perfect: isPerfect,
         correct_answers: correctAnswersCount,
         duration_seconds: durationSeconds,
+        nft_eligible: isNftEligible,
+        achievement_id: achievementId ?? null,
       },
     };
   }

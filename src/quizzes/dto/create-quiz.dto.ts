@@ -1,5 +1,6 @@
 // dto/create-quiz.dto.ts
 import { IsString, IsOptional, IsEnum, IsArray, IsNumber, IsBoolean, ValidateNested } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { CreateQuestionDto } from './create-question.dto';
 import { Type } from 'class-transformer';
 
@@ -19,7 +20,7 @@ export class CreateQuizDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateQuestionDto)
-  questions?: CreateQuestionDto[]
+  questions?: CreateQuestionDto[];
 
   @IsOptional()
   @IsBoolean()
@@ -43,9 +44,18 @@ export class CreateQuizDto {
 
   @IsOptional()
   @IsNumber()
-  total_time?: number; // total time in minutes
+  total_time?: number;
 
-  // @IsOptional()
-  // @IsNumber()
-  // time_per_question?: number; // in seconds or minutes depending on your schema
+  @ApiPropertyOptional({
+    description: 'Whether this quiz awards an NFT upon completion (ADMIN only). USER requests always ignore this field.',
+    example: false,
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isNftQuiz?: boolean;
+
+  @IsOptional()
+  @IsString()
+  reward_id?: string;
 }

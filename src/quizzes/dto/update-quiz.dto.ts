@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, MaxLength, IsUUID, IsArray, ArrayUnique } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString, MaxLength, IsUUID, IsArray, ArrayUnique } from 'class-validator';
 
 export class UpdateQuizDto {
   @ApiPropertyOptional({
@@ -39,7 +39,7 @@ export class UpdateQuizDto {
   category_id?: string;
 
   @ApiPropertyOptional({
-    description: 'Optional category name for display (redundant with category_id).',
+    description: 'Optional category name for display.',
     example: 'Geography',
   })
   @IsOptional()
@@ -56,4 +56,12 @@ export class UpdateQuizDto {
   @ArrayUnique()
   @IsString({ each: true })
   tags?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Whether this quiz awards an NFT upon completion (ADMIN only). USER requests always ignore this field.',
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isNftQuiz?: boolean;
 }

@@ -2,180 +2,92 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from "@nes
 import { SupabaseClient } from "@supabase/supabase-js";
 import { SUPABASE_CLIENT } from "src/database/database.module";
 import { SubmitAnswerDto } from "./dto/submit-answer.dto";
+import { QuizGradingService } from "src/quiz-grading/quiz-grading.service";
+import { finished } from "stream";
 
 @Injectable()
 export class LeaderboardService {
     constructor(
-        @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient
+        @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
+        private readonly quizGradingService: QuizGradingService,
     ) { }
-
-    private calScore(isCorrect: boolean, timeTaken: number, timeLimit: number): number {
-        if (!isCorrect) return 0;
-
-        const ratio = 1 - timeTaken / timeLimit;
-        return Math.round(500 + 500 * ratio);
-    }
-
-    private isAnswerCorrect(question: any, submittedAnswer: unknown): boolean {
-        if (!question || !question.correct_answer) return false;
-
-        const correct = question.correct_answer;
-        const options: string[] = Array.isArray(question.options) ? question.options : [];
-        const qType = String(question.type).toUpperCase();
-
-        const findOptionIndex = (value: unknown) =>
-            options.findIndex((option) => String(option) === String(value));
-
-        // 1. Resolve correct indices
-        const correctIndices: number[] = [];
-        const pushIndex = (value: unknown) => {
-            const n = Number(value);
-            if (!isNaN(n) && Number.isInteger(n) && n >= 0 && n < options.length) {
-                if (!correctIndices.includes(n)) {
-                    correctIndices.push(n);
-                }
-            }
-        };
-
-        if (typeof correct === 'object' && correct !== null) {
-            const correctRecord = correct as Record<string, unknown>;
-            if (Array.isArray(correctRecord.indices)) {
-                correctRecord.indices.forEach((val) => pushIndex(val));
-            } else if (typeof correctRecord.index === 'number') {
-                pushIndex(correctRecord.index);
-            } else if (typeof correctRecord.index === 'string') {
-                pushIndex(correctRecord.index);
-            }
-
-            if (Array.isArray(correctRecord.values)) {
-                correctRecord.values.forEach((val) => {
-                    const idx = findOptionIndex(val);
-                    if (idx >= 0) pushIndex(idx);
-                });
-            } else if (typeof correctRecord.value === 'string') {
-                const idx = findOptionIndex(correctRecord.value);
-                if (idx >= 0) pushIndex(idx);
-            }
-        }
-
-        // 2. Standardize submittedAnswer to an index
-        let submittedIndex: number | null = null;
-        if (typeof submittedAnswer === 'number') {
-            submittedIndex = submittedAnswer;
-        } else if (typeof submittedAnswer === 'string') {
-            const num = Number(submittedAnswer);
-            if (!isNaN(num) && Number.isInteger(num) && num >= 0 && num < options.length) {
-                submittedIndex = num;
-            } else {
-                const idx = findOptionIndex(submittedAnswer);
-                if (idx >= 0) submittedIndex = idx;
-            }
-        } else if (typeof submittedAnswer === 'object' && submittedAnswer !== null) {
-            const record = submittedAnswer as Record<string, unknown>;
-
-            if (record.index !== undefined && record.index !== null) {
-                const num = Number(record.index);
-                if (!isNaN(num) && Number.isInteger(num) && num >= 0 && num < options.length) {
-                    submittedIndex = num;
-                }
-            }
-
-            if (submittedIndex === null && typeof record.value === 'string') {
-                const idx = findOptionIndex(record.value);
-                if (idx >= 0) submittedIndex = idx;
-            }
-        }
-
-        // 3. Perform comparison depending on question type
-        if (qType === 'SINGLE_CHOICE' || qType === 'MULTIPLE_CHOICE') {
-            if (submittedIndex === null) return false;
-            return correctIndices.includes(submittedIndex);
-        }
-
-        if (qType === 'TRUE_FALSE') {
-            let correctBool = false;
-            if (typeof correct === 'object' && correct !== null) {
-                const c = correct as any;
-                if ('value' in c) {
-                    correctBool = !!c.value;
-                } else if ('answer' in c) {
-                    correctBool = !!c.answer;
-                }
-            } else if (correctIndices.length > 0) {
-                const index = correctIndices[0];
-                const optStr = String(options[index] ?? '').toLowerCase();
-                correctBool = optStr === 'true';
-            }
-
-            let submittedBool: boolean | null = null;
-            if (typeof submittedAnswer === 'boolean') {
-                submittedBool = submittedAnswer;
-            } else if (typeof submittedAnswer === 'string') {
-                const s = submittedAnswer.toLowerCase();
-                if (s === 'true') submittedBool = true;
-                if (s === 'false') submittedBool = false;
-            } else if (typeof submittedAnswer === 'object' && submittedAnswer !== null && 'value' in (submittedAnswer as any)) {
-                // xử lý case { value: boolean }
-                submittedBool = !!(submittedAnswer as any).value;
-            } else if (submittedIndex !== null) {
-                const optStr = String(options[submittedIndex] ?? '').toLowerCase();
-                if (optStr === 'true') submittedBool = true;
-                if (optStr === 'false') submittedBool = false;
-            }
-
-            return correctBool === submittedBool;
-        }
-        if (qType === 'FILL_BLANK' || qType === 'SHORT_TEXT') {
-            let correctText = '';
-            if (typeof correct === 'object' && correct !== null) {
-                const c = correct as any;
-                if ('value' in c) {
-                    correctText = String(c.value);
-                } else if ('answer' in c) {
-                    correctText = String(c.answer);
-                }
-            } else if (typeof correct === 'string') {
-                correctText = correct;
-            }
-
-            let submittedText = '';
-            if (typeof submittedAnswer === 'object' && submittedAnswer !== null) {
-                const s = submittedAnswer as any;
-                if ('value' in s) {
-                    submittedText = String(s.value);
-                } else if ('answer' in s) {
-                    submittedText = String(s.answer);
-                }
-            } else {
-                submittedText = String(submittedAnswer ?? '');
-            }
-
-            return correctText.trim().toLowerCase() === submittedText.trim().toLowerCase();
-        }
-        return JSON.stringify(correct) === JSON.stringify(submittedAnswer);
-    }
 
     async submitAnswer(sessionId: string, userId: string, dto: SubmitAnswerDto) {
 
         const { data: session, error: sessionError } = await this.supabase
             .from('quiz_sessions')
-            .select('id, status')
+            .select('id, quiz_id, status')
             .eq('id', sessionId)
             .single();
 
         if (sessionError || !session) throw new NotFoundException('Session ko ton tai');
         if (session.status !== 'playing') throw new BadRequestException('Session chưa bắt đầu hoặc đã kết thúc');
 
+        const { data: participant, error: participantError } = await this.supabase
+            .from('leaderboard')
+            .select('id, score')
+            .eq('session_id', sessionId)
+            .eq('user_id', userId)
+            .single();
+
+        if (participantError || !participant) {
+            throw new BadRequestException('Bạn chưa tham gia session này');
+        }
+
+        const { data: answered, error: answeredError } = await this.supabase
+            .from('session_answers')
+            .select('id')
+            .eq('session_id', sessionId)
+            .eq('user_id', userId)
+            .eq('question_id', dto.question_id)
+            .maybeSingle();
+
+        if (answeredError) {
+            throw new BadRequestException('Không thể kiểm tra câu trả lời trước đó');
+        }
+
+        if (answered) {
+            throw new BadRequestException('Bạn đã trả lời câu hỏi này rồi');
+        }
+
         const { data: question, error: questionError } = await this.supabase
             .from('questions')
-            .select('id, type, correct_answer, time_limit, options')
+            .select('id, quiz_id, type, correct_answer, time_limit, options')
             .eq('id', dto.question_id)
             .single();
 
         if (questionError || !question) throw new NotFoundException('Cau hoi ko ton tai');
+        if (question.quiz_id !== session.quiz_id) throw new BadRequestException('Câu hỏi không thuộc session này');
 
-        const isCorrect = this.isAnswerCorrect(question, dto.answer);
-        const score = this.calScore(isCorrect, dto.time_taken, question.time_limit);
+        const gradingResult = this.quizGradingService.gradeQuestion(question, dto.answer, dto.time_taken);
+        const isCorrect = gradingResult.isCorrect;
+        const score = gradingResult.score;
+
+        const { data: dataSessAns ,error: insertAnswerError } = await this.supabase
+            .from('session_answers')
+            .insert({
+                session_id: sessionId,
+                user_id: userId,
+                question_id: dto.question_id,
+                answer: dto.answer,
+                is_correct: isCorrect,
+                score,
+                created_at: new Date().toISOString(),
+            })
+            .select("*")
+            .eq("session_id", sessionId)
+            .eq("user_id", userId);
+    
+        const { data: dataQuesQuiz  } = await this.supabase
+            .from('question')
+            .select("*")
+            .eq("quiz_id", question.quiz_id);
+
+        let finished = (dataSessAns == dataQuesQuiz ? true : false);
+
+        if (insertAnswerError) {
+            throw new BadRequestException('Không thể lưu câu trả lời session');
+        }
 
         const { data: current } = await this.supabase
             .from('leaderboard')
@@ -183,6 +95,7 @@ export class LeaderboardService {
             .eq('session_id', sessionId)
             .eq('user_id', userId)
             .single();
+
         const newScore = (current?.score || 0) + score;
         const { data: leaderboard, error: upsertError } = await this.supabase
             .from('leaderboard')
@@ -196,13 +109,113 @@ export class LeaderboardService {
             })
             .select('score')
             .single();
-        console.log(leaderboard);
+
         if (upsertError) throw new BadRequestException('Không thể cập nhật điểm');
+
+
 
         return {
             is_correct: isCorrect,
             score_gained: score,
             total_score: leaderboard?.score,
+            finished: finished,
+        };
+    }
+
+    async finishQuiz(sessionId: string, userId: string) {
+        // 1. Lấy quiz của session
+        const { data: session } = await this.supabase
+            .from('quiz_sessions')
+            .select('quiz_id')
+            .eq('id', sessionId)
+            .single();
+
+        if (!session) {
+            throw new NotFoundException('Session không tồn tại');
+        }
+
+        // 2. Đếm tổng số câu hỏi
+        const { count: totalQuestions } = await this.supabase
+            .from('questions')
+            .select('*', {
+            count: 'exact',
+            head: true,
+            })
+            .eq('quiz_id', session.quiz_id);
+
+        // 3. Kiểm tra user đã trả lời đủ chưa
+        const { data: answers } = await this.supabase
+            .from('session_answers')
+            .select('id')
+            .eq('session_id', sessionId)
+            .eq('user_id', userId);
+
+        if ((answers?.length ?? 0) < (totalQuestions ?? 0)) {
+            throw new BadRequestException('Bạn chưa hoàn thành tất cả câu hỏi');
+        }
+
+        // 4. Lấy điểm hiện tại
+        const { data: leaderboard } = await this.supabase
+            .from('leaderboard')
+            .select('score')
+            .eq('session_id', sessionId)
+            .eq('user_id', userId)
+            .single();
+
+        const userScore = leaderboard?.score ?? 0;
+        const maxScore = (totalQuestions ?? 0) * 1000;
+        const percentage = maxScore > 0 ? (userScore / maxScore) * 100 : 0;
+
+        // 5. Lấy reward
+        const { data: quiz } = await this.supabase
+            .from('quizzes')
+            .select('reward_id')
+            .eq('id', session.quiz_id)
+            .single();
+
+        const nftEligible = percentage >= 80;
+
+        let achievementId: string | null = null;
+
+        if (nftEligible && quiz?.reward_id) {
+            // Kiểm tra đã có achievement chưa
+            const { data: existed } = await this.supabase
+            .from('achievement')
+            .select('id,status')
+            .eq('user_id', userId)
+            .eq('quiz_id', session.quiz_id)
+            .maybeSingle();
+
+            if (existed) {
+            achievementId = existed.id;
+            } else {
+            const { data: achievement, error } = await this.supabase
+                .from('achievement')
+                .insert({
+                user_id: userId,
+                quiz_id: session.quiz_id,
+                reward_id: quiz.reward_id,
+                status: 'PENDING',
+                created_at: new Date().toISOString(),
+                })
+                .select('id')
+                .single();
+
+            if (error) {
+                throw new BadRequestException(error.message);
+            }
+
+            achievementId = achievement.id;
+            }
+        }
+
+        return {
+            finished: true,
+            total_score: userScore,
+            max_score: maxScore,
+            percentage: Number(percentage.toFixed(2)),
+            nft_eligible: nftEligible,
+            achievement_id: achievementId,
         };
     }
     // GET /sessions/:id/leaderboard

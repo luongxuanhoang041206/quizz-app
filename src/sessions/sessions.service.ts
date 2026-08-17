@@ -1,12 +1,14 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { SUPABASE_CLIENT } from "src/database/database.module";
+import { SessionFinalizeService } from "./session-finalize.service";
 
 @Injectable()
 export class SessionsService {
 
     constructor(
-        @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient
+        @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
+        private readonly sessionFinalizeService: SessionFinalizeService,
     ) {}
 
     private generateCode(): string {
@@ -142,6 +144,11 @@ export class SessionsService {
             .single();
 
         if(error) throw new BadRequestException('Khong the cap nhat trang thai');
+
+        if (updated?.status === 'finished') {
+            await this.sessionFinalizeService.finalizeSession(sessionId);
+        }
+
         return updated;
     }
 } 

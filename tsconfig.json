@@ -19,7 +19,7 @@
     "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false,
-    "types": ["node", "jest"],
+    "types": ["node", "jest", "express", "multer"],
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false
   }
