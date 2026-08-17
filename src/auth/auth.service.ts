@@ -40,12 +40,12 @@ export class AuthService {
     const { data: user, error } = await this.supabase
       .from('users')
       .insert({ email: dto.email, username: dto.username, password_hash })
-      .select('id, email, username, avatar_url, bio, created_at')
+      .select('id, email, username, avatar_url, bio, created_at, role')
       .single();
 
     if (error) throw new Error(error.message);
 
-    const token = this.signToken(user.id, user.email, user.username);
+    const token = this.signToken(user.id, user.email, user.username, user.role);
 
     return { access_token: token, user };
   }
@@ -53,7 +53,7 @@ export class AuthService {
   async login(dto: LoginDto) {
     const { data: user } = await this.supabase
       .from('users')
-      .select('id, email, username, password_hash, avatar_url, bio, created_at')
+      .select('id, email, username, password_hash, avatar_url, bio, created_at, role')
       .eq('email', dto.email)
       .single();
 
@@ -62,7 +62,7 @@ export class AuthService {
     const isMatch = await bcrypt.compare(dto.password, user.password_hash);
     if (!isMatch) throw new UnauthorizedException('Email or password ko dung');
 
-    const token = this.signToken(user.id, user.email, user.username);
+    const token = this.signToken(user.id, user.email, user.username, user.role);
 
     const safeUser = {
       id: user.id,
@@ -71,6 +71,7 @@ export class AuthService {
       avatar_url: user.avatar_url,
       bio: user.bio,
       created_at: user.created_at,
+      role: user.role
     };
     return { access_token: token, user: safeUser };
   }
@@ -87,7 +88,7 @@ export class AuthService {
     return user;
   }
 
-  private signToken(userId: string, email: string, username: string): string {
-    return this.jwtService.sign({ sub: userId, email, username });
+  private signToken(userId: string, email: string, username: string, role: string): string {
+    return this.jwtService.sign({ sub: userId, email, username, role });
   }
 }

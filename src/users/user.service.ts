@@ -145,35 +145,54 @@ export class UserService {
   }
 
   async getUserBadges(userId: string) {
-    const [unlockedRes, lockedRes] = await Promise.all([
-      this.supabase
-        .from('user_badges')
-        .select('id, badge_id, earned_at, badges(id, key, name, description, icon_url, rarity, xp_reward)')
-        .eq('user_id', userId),
-      this.supabase
-        .from('badges')
-        .select('id, key, name, description, icon_url, rarity, xp_reward')
-        .eq('is_active', true),
-    ]);
+    const { data, error } = await this.supabase
+      .from('achievement')
+      .select(`
+        id,
+        status,
+        quiz_id,
+        reward_id,
+        tx_hash,
+        policy_id,
+        asset_name,
+        ipfs_cid,
+        minted_at,
+        created_at,
+        reward:reward_id (
+          id,
+          name,
+          description,
+          image
+        )
+      `)
+      .eq('user_id', userId)
+      .eq('status', 'SUCCESS')
+      .order('minted_at', { ascending: false });
 
-    if (unlockedRes.error) throw new BadRequestException(unlockedRes.error.message);
-    if (lockedRes.error) throw new BadRequestException(lockedRes.error.message);
+    if (error) throw new BadRequestException(error.message);
 
-    const unlocked = (unlockedRes.data || []).map((r: any) => ({
-      id: r.badges?.id || r.badge_id,
-      key: r.badges?.key,
-      name: r.badges?.name,
-      description: r.badges?.description,
-      icon_url: r.badges?.icon_url,
-      rarity: r.badges?.rarity,
-      xp_reward: r.badges?.xp_reward,
-      earned_at: r.earned_at,
-    }));
-
-    const unlockedIds = new Set(unlocked.map((b) => b.id));
-    const locked = (lockedRes.data || []).filter((b: any) => !unlockedIds.has(b.id));
-
-    return { unlocked, locked };
+    return (data || []).map((item: any) => {
+      const rewardObj = Array.isArray(item.reward) ? item.reward[0] : item.reward;
+      return {
+        id: item.id,
+        status: item.status,
+        quizId: item.quiz_id,
+        reward: rewardObj
+          ? {
+              id: rewardObj.id,
+              name: rewardObj.name,
+              description: rewardObj.description ?? null,
+              image: rewardObj.image,
+              metadata: null,
+              policyType: 'CIP25',
+              policyId: item.policy_id ?? null,
+              assetName: item.asset_name ?? null,
+            }
+          : null,
+        txHash: item.tx_hash ?? null,
+        mintedAt: item.minted_at ?? item.created_at ?? null,
+      };
+    });
   }
 
   async getActivityFeed(userId: string, limit = 20, cursor?: string) {
@@ -192,17 +211,24 @@ export class UserService {
   }
 
   async getMilestones(userId: string) {
-    const { data, error } = await this.supabase
-      .from('users')
-      .select('id, total_xp, total_badges, user_level')
-      .eq('id', userId)
-      .single();
+    const [{ data: user, error }, { count }] = await Promise.all([
+      this.supabase
+        .from('users')
+        .select('id, total_xp, user_level')
+        .eq('id', userId)
+        .single(),
+      this.supabase
+        .from('achievement')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('status', 'SUCCESS'),
+    ]);
 
-    if (error || !data) throw new NotFoundException('User not found');
+    if (error || !user) throw new NotFoundException('User not found');
     return {
-      total_xp: data.total_xp || 0,
-      total_badges: data.total_badges || 0,
-      user_level: data.user_level || 1,
+      total_xp: user.total_xp || 0,
+      total_badges: count || 0,
+      user_level: user.user_level || 1,
     };
   }
 

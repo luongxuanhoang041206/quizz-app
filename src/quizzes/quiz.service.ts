@@ -79,7 +79,10 @@ export class QuizService {
     return this.getPublicQuizzes({ search: keyword });
   }
 
-  async createQuiz(userId: string, dto: CreateQuizDto) {
+  async createQuiz(userId: string, dto: CreateQuizDto, userRole?: string) {
+    // ADMIN can set isNftQuiz; USER always gets false — never trust the client
+    const isNftQuiz = userRole === 'ADMIN' ? (dto.isNftQuiz ?? false) : false;
+  //  console.log(dto);
     const { data, error } = await this.supabase
       .from('quizzes')
       .insert({
@@ -91,7 +94,8 @@ export class QuizService {
         difficulty: dto.difficulty,
         tags: dto.tags ?? [],
         total_time: dto.total_time ?? dto.total_time,
-      //  time_per_question: dto.time_per_question,
+        is_nft_quiz: isNftQuiz,
+        reward_id: dto.reward_id,
       })
       .select()
       .single();
@@ -182,15 +186,25 @@ export class QuizService {
     return data;
   }
 
-  async updateQuiz(quizId: string, userId: string, dto: UpdateQuizDto) {
+  async updateQuiz(quizId: string, userId: string, dto: UpdateQuizDto, userRole?: string) {
     await this.ensureQuizOwner(quizId, userId);
+
+    // Strip isNftQuiz from the payload — handle separately based on role
+    const { isNftQuiz, ...rest } = dto;
+
+    const updatePayload: Record<string, unknown> = {
+      ...rest,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Only ADMIN can change isNftQuiz — USER requests silently ignore it
+    if (userRole === 'ADMIN' && isNftQuiz !== undefined) {
+      updatePayload.is_nft_quiz = isNftQuiz;
+    }
 
     const { data, error } = await this.supabase
       .from('quizzes')
-      .update({
-        ...dto,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', quizId)
       .select()
       .single();
@@ -619,6 +633,27 @@ export class QuizService {
     if (error) throw new BadRequestException(error.message);
 
     return { message: 'Answer deleted successfully' };
+  }
+
+  async enableNft(quizId: string): Promise<{ id: string; is_nft_quiz: boolean }> {
+    const { data: quiz, error: fetchError } = await this.supabase
+      .from('quizzes')
+      .select('id')
+      .eq('id', quizId)
+      .single();
+
+    if (fetchError || !quiz) throw new NotFoundException('Quiz not found');
+
+    const { data, error } = await this.supabase
+      .from('quizzes')
+      .update({ is_nft_quiz: true, updated_at: new Date().toISOString() })
+      .eq('id', quizId)
+      .select('id, is_nft_quiz')
+      .single();
+
+    if (error) throw new BadRequestException(error.message);
+
+    return data;
   }
 
   async toggle(quizId: string, userId: string, dto: toggleQuestionDto) {

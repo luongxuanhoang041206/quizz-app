@@ -125,6 +125,7 @@ export class AttemptsController {
     @Body() submitAttemptDto: SubmitAttemptDto,
     @CurrentUser() user: { id: string; email: string },
   ) {
+    console.log("1");
     return this.attemptsService.submit(attemptId, submitAttemptDto, user.id);
   }
 

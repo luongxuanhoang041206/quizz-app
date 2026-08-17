@@ -11,6 +11,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { QuizModule } from './quizzes/quiz.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
+import { AchievementModule } from 'blockchain/src/achievement/achievement.module';
+import { RewardModule } from './reward/reward.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -22,7 +24,9 @@ import { LeaderboardModule } from './leaderboard/leaderboard.module';
     DashboardModule,
     QuizModule,
     SessionsModule,
-    LeaderboardModule
+    LeaderboardModule,
+    AchievementModule,
+    RewardModule,
   ],
   controllers: [AppController],
   providers: [AppService],

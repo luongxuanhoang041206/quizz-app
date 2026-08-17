@@ -18,6 +18,14 @@ export class LeaderboardController {
     return this.leaderboardService.submitAnswer(sessionId,user.id, dto);
   }
 
+  @Post('finish')
+  finishLiveQuiz(
+    @Param('id') sessionId: string,
+    @CurrentUser() user: AuthUser
+  ) {
+    return this.leaderboardService.finishQuiz(sessionId, user.id);
+  }
+
   @Get('leaderboard')
   getLeaderboard(@Param('id') sessionId: string) {
     return this.leaderboardService.getLeaderboard(sessionId);
