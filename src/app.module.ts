@@ -13,6 +13,7 @@ import { SessionsModule } from './sessions/sessions.module';
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
 import { AchievementModule } from 'blockchain/src/achievement/achievement.module';
 import { RewardModule } from './reward/reward.module';
+import { ChallengeModule } from './challenges/challenge.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -27,6 +28,7 @@ import { RewardModule } from './reward/reward.module';
     LeaderboardModule,
     AchievementModule,
     RewardModule,
+    ChallengeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

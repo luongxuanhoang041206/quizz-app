@@ -31,12 +31,23 @@ const BackendPkhSchema = Data.Bytes();
 type BackendPkh = Data.Static<typeof BackendPkhSchema>;
 
 const BackendPkh = BackendPkhSchema as unknown as BackendPkh;
+
+type AssetOwnershipResult = {
+  owned: boolean;
+  quantity: bigint;
+  assetUnit: string;
+  address: string;
+  // policyId: string;
+  // assetName: string;
+}
+
 @Injectable()
 export class CardanoService implements OnModuleInit {
   private lucid!: LucidEvolution;
   private policyId!: string;
   private mintingPolicy!: MintingPolicy;
   private network!: Network;
+  private blockfrost!: Blockfrost;
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -45,10 +56,15 @@ export class CardanoService implements OnModuleInit {
     const blockfrostProjectId = this.configService.getOrThrow<string>('BLOCKFROST_PROJECT_ID');
     const seedPhrase = this.configService.getOrThrow<string>('BACKEND_SEED_PHRASE');
 
+    this.blockfrost = new Blockfrost(
+      blockfrostUrl,
+      blockfrostProjectId,
+    );
+
     this.network = this.resolveNetwork(blockfrostUrl);
 
     this.lucid = await Lucid(
-      new Blockfrost(blockfrostUrl, blockfrostProjectId),
+      this.blockfrost,
       this.network,
     );
 
@@ -75,15 +91,42 @@ export class CardanoService implements OnModuleInit {
 
   //   console.log('[Cardano] BACKEND_PKH:', BACKEND_PKH);
   //   console.log('[Cardano] Policy ID:', this.policyId);
-    const validatorObj = this.loadMintAchievementValidator();
+    // const validatorObj = this.loadMintAchievementValidator();
+
+    //   this.mintingPolicy = {
+    //     type: 'PlutusV3',
+    //     script: validatorObj.compiledCode,
+    //   };
+
+    //   this.policyId = mintingPolicyToId(this.mintingPolicy);
+
+    //   console.log('[Cardano] Blueprint hash:', validatorObj.hash);
+    //   console.log('[Cardano] Calculated policy ID:', this.policyId);
+
+      const ParamsSchema = Data.Tuple([
+        Data.Bytes(),
+      ]);
+
+      type Params = Data.Static<typeof ParamsSchema>;
+
+      const Params = ParamsSchema as unknown as Params;
+
+      const validatorObj = this.loadMintAchievementValidator();
+
+      const appliedScript = applyParamsToScript<Params>(
+        validatorObj.compiledCode,
+        [BACKEND_PKH],
+        Params,
+      );
 
       this.mintingPolicy = {
         type: 'PlutusV3',
-        script: validatorObj.compiledCode,
+        script: appliedScript,
       };
 
       this.policyId = mintingPolicyToId(this.mintingPolicy);
 
+      console.log('[Cardano] BACKEND_PKH:', BACKEND_PKH);
       console.log('[Cardano] Blueprint hash:', validatorObj.hash);
       console.log('[Cardano] Calculated policy ID:', this.policyId);
   }
@@ -333,5 +376,28 @@ export class CardanoService implements OnModuleInit {
     if (blockfrostUrl.includes('mainnet')) return 'Mainnet';
     if (blockfrostUrl.includes('preprod')) return 'Preprod';
     return 'Preview';
+  }
+
+  async checkAssetOwnership(
+    address: string,
+    policyId: string,
+    assetName: string,
+  ): Promise<AssetOwnershipResult> {
+    const assetUnit = `${policyId}${assetName}`; // ghep thanh cardano asset unit
+    const utxos = await this.blockfrost.getUtxosWithUnit(address, assetName); // dsach native assets dang duoc address so huu
+
+    let quantity = 0n;
+    for (const utxo of utxos) {
+      quantity += utxo.assets[assetName] ?? 0n;
+    }
+
+    return {
+      owned: quantity > 0n,
+      quantity,
+      assetUnit,
+      address,
+      // policyId,
+      // assetName,
+    }
   }
 }

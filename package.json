@@ -83,7 +83,8 @@
     ],
     "rootDir": ".",
     "moduleNameMapper": {
-      "^src/(.*)$": "<rootDir>/src/$1"
+      "^src/(.*)$": "<rootDir>/src/$1",
+      "^blockchain/(.*)$": "<rootDir>/blockchain/$1"
     },
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
